@@ -5,44 +5,55 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Mamapa Zagreb</title>
 <meta name="description" content="Mjesta za roditelje s bebama u Zagrebu: stolovi za previjanje, igraonice, kafići bez dima. / Baby-friendly places in Zagreb.">
-<meta name="theme-color" content="#1F5FA8">
+<meta name="theme-color" content="#17A99B">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Mamapa <span class="city">Zagreb</span><small id="t-sub"></small></h1>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="./" aria-label="Mamapa Zagreb"><span class="mark" id="brandmark"></span><span class="word">MAMAPA</span><span class="city">Zagreb</span></a>
     <div class="headr">
       <div class="lang" role="group" aria-label="Language">
         <button id="lang-hr" type="button">HR</button><button id="lang-en" type="button">EN</button>
       </div>
-      <button id="auth" class="btn ghost small" type="button"></button>
+      <button id="auth" class="authbtn" type="button"></button>
     </div>
-  </header>
-
-  <div class="search"><input id="q" type="search" autocomplete="off"></div>
-  <div class="chips" id="cats"></div>
-  <div class="filters">
-    <select id="district" aria-label="District"></select>
   </div>
+</header>
 
-  <div class="mapbox"><div id="map"></div>
-    <div class="pickbar" id="pickbar" hidden><span id="t-pick"></span><button id="pickcancel" type="button"></button></div>
-  </div>
+<main class="wrap">
+  <section class="intro">
+    <p class="kicker" id="t-sub"></p>
+    <label class="search"><span class="ico" id="searchico"></span><input id="q" type="search" autocomplete="off"></label>
+  </section>
 
-  <div class="listhead"><h2 id="t-places"></h2><span class="count" id="count"></span></div>
-  <div class="list" id="list"></div>
-  <p class="note foot" id="t-foot"></p>
-</div>
+  <nav class="tiles" id="cats" aria-label="Categories"></nav>
 
-<button class="fab" id="fab" type="button"></button>
+  <section class="mapsec">
+    <div class="mapbox"><div id="map"></div>
+      <div class="pickbar" id="pickbar" hidden><span id="t-pick"></span><button id="pickcancel" type="button"></button></div>
+    </div>
+  </section>
+
+  <section class="listsec">
+    <div class="listhead">
+      <h2 id="t-places"></h2>
+      <div class="lh-r"><span class="count" id="count"></span><select id="district" aria-label="District"></select></div>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <p class="foot" id="t-foot"></p>
+</main>
+
+<button class="fab" id="fab" type="button"><span id="fabico"></span><span id="fabtxt"></span></button>
 <div id="sheetroot"></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -50,6 +61,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="i18n.js"></script>
+<script src="icons.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

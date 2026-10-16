@@ -1,42 +1,53 @@
 (function () {
 "use strict";
-const T = window.BEBI_I18N, CATS = window.BEBI_CATS, COLORS = window.BEBI_COLORS, CFG = window.BEBI_CONFIG;
+const T = window.BEBI_I18N, CATS = window.BEBI_CATS, COLORS = window.BEBI_COLORS, CFG = window.BEBI_CONFIG, IC = window.MAMAPA_ICONS;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ic = (name, cls) => `<span class="${cls || ""}">${IC[name] || ""}</span>`;
 let lang = "en";
 try { lang = localStorage.getItem("bk-lang") || ((navigator.language || "").toLowerCase().startsWith("hr") ? "hr" : "en"); } catch (e) {}
 const t = k => T[lang][k];
 const catName = id => (CATS.find(c => c.id === id) || {})[lang] || id;
+const mainCat = p => (p.categories || [])[0] || "changing";
+const colorOf = p => COLORS[mainCat(p)] || "#17A99B";
 
 const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-const S = { places: [], loaded: false, failed: false, cat: null, district: "", q: "", user: null, sheet: null, pick: null };
+const S = { places: [], loaded: false, failed: false, cat: null, district: "", q: "", user: null, sheet: null, pick: null, sel: null };
 
-// ---------- map ----------
-const map = L.map("map", { zoomControl: true, attributionControl: true }).setView([45.800, 15.975], 12);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+$("brandmark").innerHTML = IC.pin; $("searchico").innerHTML = IC.search; $("fabico").innerHTML = IC.plus;
+
+// ---------- map (CARTO Voyager: a clean, Google-like style on OpenStreetMap data) ----------
+const map = L.map("map", { zoomControl: false, attributionControl: true }).setView([45.800, 15.975], 12);
+L.control.zoom({ position: "topright" }).addTo(map);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  maxZoom: 20, subdomains: "abcd",
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 }).addTo(map);
 const pinLayer = L.layerGroup().addTo(map);
+const DROP = c => `<svg class="drop" viewBox="0 0 34 44"><path d="M17 43C17 43 2 27.5 2 16.5a15 15 0 0 1 30 0C32 27.5 17 43 17 43z" fill="${c}" stroke="#fff" stroke-width="2"/></svg>`;
+function pinIcon(cat, color, sel) {
+  return L.divIcon({ className: "", iconSize: [34, 44], iconAnchor: [17, 43], tooltipAnchor: [0, -38],
+    html: `<div class="gpin${sel ? " sel" : ""}">${DROP(color)}<span class="gi">${IC[cat] || ""}</span></div>` });
+}
 let draftMarker = null;
-function colorOf(p) { return COLORS[(p.categories || [])[0]] || "#1F5FA8"; }
 function drawPins(list) {
   pinLayer.clearLayers();
   list.forEach(p => {
-    L.circleMarker([p.lat, p.lng], { radius: 9, weight: 3, color: "#fff", fillColor: colorOf(p), fillOpacity: 1 })
-      .on("click", () => openPlace(p.id)).bindTooltip(p.name).addTo(pinLayer);
+    L.marker([p.lat, p.lng], { icon: pinIcon(mainCat(p), colorOf(p), S.sel === p.id), riseOnHover: true, zIndexOffset: S.sel === p.id ? 1000 : 0 })
+      .on("click", () => openPlace(p.id)).bindTooltip(p.name, { direction: "top" }).addTo(pinLayer);
   });
 }
 function setDraft(lat, lng) {
   if (draftMarker) draftMarker.remove();
-  draftMarker = lat == null ? null : L.marker([lat, lng], { draggable: true }).addTo(map)
+  draftMarker = lat == null ? null : L.marker([lat, lng], { draggable: true, icon: pinIcon("pin", "#25303A", true), zIndexOffset: 2000 }).addTo(map)
     .on("dragend", e => { const ll = e.target.getLatLng(); if (S.draft) { S.draft.lat = ll.lat; S.draft.lng = ll.lng; } });
 }
 map.on("click", e => {
   if (!S.pick) return;
   S.draft.lat = e.latlng.lat; S.draft.lng = e.latlng.lng; setDraft(e.latlng.lat, e.latlng.lng);
-  S.pick = null; $("pickbar").hidden = true; openAdd(true);
+  S.pick = null; $("pickbar").hidden = true; openAdd();
 });
-$("pickcancel").onclick = () => { S.pick = null; $("pickbar").hidden = true; openAdd(true); };
+$("pickcancel").onclick = () => { S.pick = null; $("pickbar").hidden = true; openAdd(); };
 
 // ---------- data ----------
 async function loadPlaces() {
@@ -47,6 +58,7 @@ async function loadPlaces() {
     return { ...p, reviewCount: (p.reviews || []).length, avg: rated.length ? rated.reduce((a, r) => a + r.rating, 0) / rated.length : 0 };
   });
   S.loaded = true; renderAll();
+  if (S.sheet && S.sheet.rerender && S.sheet.kind === "place") S.sheet.rerender();
 }
 sb.channel("places-live").on("postgres_changes", { event: "*", schema: "public", table: "places" }, () => loadPlaces())
   .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, () => loadPlaces()).subscribe();
@@ -62,7 +74,7 @@ function displayName() {
   return String(m.full_name || m.name || "").split(" ")[0].slice(0, 40);
 }
 
-// ---------- list ----------
+// ---------- chrome & list ----------
 function filtered() {
   const q = S.q.trim().toLowerCase();
   return S.places.filter(p => (!S.cat || (p.categories || []).includes(S.cat)) && (!S.district || p.district === S.district) &&
@@ -72,10 +84,10 @@ function renderChrome() {
   document.documentElement.lang = lang;
   $("t-sub").textContent = t("sub"); $("q").placeholder = t("search"); $("t-places").textContent = t("places");
   $("t-pick").textContent = t("pick"); $("pickcancel").textContent = t("cancel"); $("t-foot").textContent = t("foot");
-  $("fab").textContent = t("add"); $("auth").textContent = S.user ? t("logout") : t("login");
+  $("fabtxt").textContent = t("add").replace("+ ", ""); $("auth").textContent = S.user ? t("logout") : t("loginShort");
   $("lang-hr").setAttribute("aria-pressed", lang === "hr"); $("lang-en").setAttribute("aria-pressed", lang === "en");
-  $("cats").innerHTML = `<button class="chip" type="button" data-c="" aria-pressed="${!S.cat}">${esc(t("all"))}</button>` +
-    CATS.map(c => `<button class="chip" type="button" data-c="${c.id}" style="--c:${COLORS[c.id]}" aria-pressed="${S.cat === c.id}"><span class="dot"></span>${esc(c[lang])}</button>`).join("");
+  $("cats").innerHTML = `<button class="tile all" type="button" data-c="" aria-pressed="${!S.cat}"><span class="blk">${esc(t("all").toUpperCase())}</span><span class="lbl">${esc(t("all"))}</span></button>` +
+    CATS.map(c => `<button class="tile" type="button" data-c="${c.id}" style="--c:${COLORS[c.id]}" aria-pressed="${S.cat === c.id}"><span class="blk">${ic(c.id)}</span><span class="lbl">${esc(c[lang])}</span></button>`).join("");
   const ds = [...new Set(S.places.map(p => p.district).filter(Boolean))].sort((a, b) => a.localeCompare(b, "hr"));
   $("district").innerHTML = `<option value="">${esc(t("allDistricts"))}</option>` + ds.map(d => `<option ${d === S.district ? "selected" : ""}>${esc(d)}</option>`).join("");
 }
@@ -85,10 +97,14 @@ function renderList() {
   if (!S.loaded) { el.innerHTML = `<div class="empty">${esc(S.failed ? t("offline") : t("loading"))}</div>`; return; }
   if (!S.places.length) { el.innerHTML = `<div class="empty"><strong>${esc(t("emptyT"))}</strong>${esc(t("emptyD"))}</div>`; return; }
   if (!L2.length) { el.innerHTML = `<div class="empty">${esc(t("noMatch"))}</div>`; return; }
-  el.innerHTML = L2.map(p => `<button class="item" type="button" data-id="${p.id}" style="--c:${colorOf(p)}"><span class="swatch"></span><span style="min-width:0"><span class="name">${esc(p.name)}</span><div class="meta">${esc([p.address, p.district].filter(Boolean).join(" · "))}</div><div class="tags">${(p.categories || []).map(c => `<span class="tag" style="--c:${COLORS[c]}">${esc(catName(c))}</span>`).join("")}</div></span>${p.reviewCount ? `<span class="rating">${p.avg ? `<b>★</b> ${p.avg.toFixed(1)} · ` : ""}${p.reviewCount}</span>` : ""}</button>`).join("");
+  el.innerHTML = L2.map(p => `<button class="item" type="button" data-id="${p.id}" style="--c:${colorOf(p)}">
+    <span class="blk">${ic(mainCat(p))}</span>
+    <span class="txt"><span class="name">${esc(p.name)}</span><span class="meta">${esc([p.district, p.address].filter(Boolean).join(" · "))}</span>
+      <span class="dots">${(p.categories || []).map(c => `<i style="--c:${COLORS[c]}" title="${esc(catName(c))}"></i>`).join("")}</span></span>
+    <span class="end">${p.avg ? `${ic("star", "st")}${p.avg.toFixed(1)}` : ""}${ic("chevron", "chev")}</span></button>`).join("");
 }
 function renderAll() { renderChrome(); renderList(); }
-$("cats").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; S.cat = b.dataset.c || null; renderAll(); };
+$("cats").onclick = e => { const b = e.target.closest(".tile"); if (!b) return; S.cat = b.dataset.c || null; renderAll(); };
 $("district").onchange = e => { S.district = e.target.value; renderList(); };
 $("q").oninput = e => { S.q = e.target.value; renderList(); };
 $("list").onclick = e => { const b = e.target.closest(".item"); if (b) openPlace(b.dataset.id); };
@@ -96,14 +112,20 @@ function setLang(l) { lang = l; try { localStorage.setItem("bk-lang", l); } catc
 $("lang-hr").onclick = () => setLang("hr"); $("lang-en").onclick = () => setLang("en");
 
 // ---------- sheets ----------
-function showSheet(html) {
-  $("sheetroot").innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+function showSheet(html, color) {
+  $("sheetroot").innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" style="--c:${color || "var(--teal)"}">${html}</div></div>`;
   $("scrim").addEventListener("click", e => { if (e.target.id === "scrim") closeSheet(); });
 }
-function closeSheet() { S.sheet = null; $("sheetroot").innerHTML = ""; }
+function band(title, sub, icon) {
+  return `<div class="band">${icon ? ic(icon, "bi") : ""}<div style="flex:1;min-width:0"><h3>${esc(title)}</h3>${sub ? `<p>${esc(sub)}</p>` : ""}</div><button class="x" id="sx" type="button" aria-label="${esc(t("cancel"))}">${IC.close}</button></div>`;
+}
+function closeSheet() { S.sheet = null; $("sheetroot").innerHTML = ""; if (S.sel) { S.sel = null; renderList(); } }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && S.sheet) closeSheet(); });
 function toast(msg) { const el = $("toast"); el.textContent = msg; el.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => el.hidden = true, 2600); }
-const starsHtml = (id, n) => `<div class="stars" id="${id}">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-n="${i}" class="${i <= n ? "on" : ""}" aria-label="${i}">★</button>`).join("")}</div>`;
+const starsHtml = (id, n) => `<div class="stars" id="${id}">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-n="${i}" class="${i <= n ? "on" : ""}" aria-label="${i}">${IC.star}</button>`).join("")}</div>`;
+const fileHtml = id => `<label class="file">${ic("camera", "fi")}<span id="${id}-l">${esc(t("addPhoto"))} · ${esc(t("photoTip"))}</span><input id="${id}" type="file" accept="image/*" multiple></label>`;
+function bindFile(id, onFiles) { const el = $(id); if (!el) return; el.onchange = e => { const f = [...e.target.files]; onFiles(f); $(id + "-l").textContent = f.length ? `${t("addPhoto")} · ${f.length}` : `${t("addPhoto")} · ${t("photoTip")}`; }; }
+function bindStars(id, get, set) { const el = $(id); if (!el) return; el.onclick = e => { const b = e.target.closest("button"); if (!b) return; set(+b.dataset.n); [...el.children].forEach((x, i) => x.classList.toggle("on", i < get())); }; }
 
 // ---------- photos ----------
 async function compress(file) {
@@ -130,33 +152,39 @@ async function uploadPhotos(files) {
 const photoUrl = p => sb.storage.from("photos").getPublicUrl(p).data.publicUrl;
 
 // ---------- add place ----------
-function needLogin() { if (S.user) return false; showSheet(`<div class="sheethead"><h3>${esc(t("add").replace("+ ", ""))}</h3><button class="x" id="sx" type="button">✕</button></div><p>${esc(t("loginToPost"))}</p><div class="row"><button class="btn" id="go" type="button">${esc(t("login"))}</button></div>`); $("sx").onclick = closeSheet; $("go").onclick = () => $("auth").click(); return true; }
-$("fab").onclick = () => { if (needLogin()) return; S.draft = { link: "", name: "", address: "", district: "", lat: null, lng: null, cats: [], rating: 0, text: "", status: "" }; S.files = []; setDraft(null); openAdd(true); };
+function needLogin() {
+  if (S.user) return false;
+  showSheet(`${band(t("add").replace("+ ", ""), "", "pin")}<div class="body"><p style="margin:0">${esc(t("loginToPost"))}</p><div class="row"><button class="btn" id="go" type="button">${esc(t("login"))}</button></div></div>`);
+  $("sx").onclick = closeSheet; $("go").onclick = () => $("auth").click(); return true;
+}
+$("fab").onclick = () => { if (needLogin()) return; S.draft = { link: "", name: "", address: "", district: "", lat: null, lng: null, cats: [], rating: 0, text: "", status: "" }; S.files = []; setDraft(null); openAdd(); };
 
 function openAdd() {
   const d = S.draft; S.sheet = { kind: "add", rerender: () => { keepFields(); openAdd(); } };
   const show = d.status === "found" || d.status === "partial";
-  showSheet(`<div class="sheethead"><h3>${esc(t("add").replace("+ ", ""))}</h3><button class="x" id="sx" type="button" aria-label="${esc(t("cancel"))}">✕</button></div>
-  <label class="f">1 · ${esc(t("shareLbl"))}<input id="flink" type="url" inputmode="url" placeholder="https://maps.app.goo.gl/…" value="${esc(d.link)}"><span class="note">${esc(t("shareHelp"))}</span></label>
+  showSheet(`${band(t("add").replace("+ ", ""), t("shareHelp"), "pin")}
+  <div class="body">
+  <label class="f"><span class="step"><b>1</b>${esc(t("shareLbl"))}</span><input id="flink" type="url" inputmode="url" placeholder="https://maps.app.goo.gl/…" value="${esc(d.link)}"></label>
   ${d.status === "loading" ? `<p class="note">${esc(t("finding"))}</p>` : ""}
   ${show ? `<div class="found">
     ${d.status === "found" ? `<span class="ok">✓ ${esc(t("found"))}</span>` : `<span class="err">${esc(t("notFound"))}</span>`}
-    <label class="f">${esc(t("name"))}<input id="fname" value="${esc(d.name)}" maxlength="120"></label>
-    <label class="f">${esc(t("address"))}<input id="faddr" value="${esc(d.address)}" maxlength="200"></label>
-    <div class="row">${d.lat != null ? `<span class="note">✓ ${esc(t("locSet"))}${d.district ? " · " + esc(d.district) : ""}</span><button class="btn ghost small" id="fpick" type="button">${esc(t("moveLoc"))}</button>` : `<span class="err">${esc(t("locMissing"))}</span><button class="btn ghost small" id="fpick" type="button">📍 ${esc(t("pickOnMap"))}</button>`}</div>
+    <label class="f"><span class="lab">${esc(t("name"))}</span><input id="fname" value="${esc(d.name)}" maxlength="120"></label>
+    <label class="f"><span class="lab">${esc(t("address"))}</span><input id="faddr" value="${esc(d.address)}" maxlength="200"></label>
+    <div class="row">${d.lat != null ? `<span class="note">✓ ${esc(t("locSet"))}${d.district ? " · " + esc(d.district) : ""}</span><button class="btn ghost small" id="fpick" type="button">${esc(t("moveLoc"))}</button>` : `<span class="err">${esc(t("locMissing"))}</span><button class="btn ghost small" id="fpick" type="button">${esc(t("pickOnMap"))}</button>`}</div>
   </div>` : ""}
-  <div class="f">2 · ${esc(t("cats"))}<div class="checks" id="fcats">${CATS.map(c => `<label><input type="checkbox" value="${c.id}" ${d.cats.includes(c.id) ? "checked" : ""}><span class="dot" style="--c:${COLORS[c.id]}"></span>${esc(c[lang])}</label>`).join("")}</div></div>
-  <div class="f">3 · ${esc(t("writeReview"))} <span class="note">(${esc(t("optional"))})</span>
+  <div class="f"><span class="step"><b>2</b>${esc(t("cats"))}</span><div class="picks" id="fcats">${CATS.map(c => `<label style="--c:${COLORS[c.id]}"><input type="checkbox" value="${c.id}" ${d.cats.includes(c.id) ? "checked" : ""}>${ic(c.id, "pi")}${esc(c[lang])}</label>`).join("")}</div></div>
+  <div class="f"><span class="step"><b>3</b>${esc(t("writeReview"))} · ${esc(t("optional"))}</span>
     ${starsHtml("fstars", d.rating)}
     <textarea id="ftext" maxlength="1000" placeholder="${esc(t("reviewText"))}">${esc(d.text)}</textarea>
-    <label class="f" style="font-weight:400">${esc(t("addPhoto"))} — <span class="note">${esc(t("photoTip"))}</span><input id="fphotos" type="file" accept="image/*" multiple></label>
+    ${fileHtml("fphotos")}
   </div>
   <p class="err" id="ferr" role="alert"></p>
-  <div class="row"><button class="btn" id="fsave" type="button">${esc(t("save"))}</button><button class="btn ghost" id="fcancel" type="button">${esc(t("cancel"))}</button></div>`);
+  <div class="row"><button class="btn" id="fsave" type="button">${esc(t("save"))}</button><button class="btn ghost" id="fcancel" type="button">${esc(t("cancel"))}</button></div>
+  </div>`);
   $("sx").onclick = $("fcancel").onclick = () => { setDraft(null); closeSheet(); };
   const pk = $("fpick"); if (pk) pk.onclick = () => { keepFields(); $("sheetroot").innerHTML = ""; S.pick = true; $("pickbar").hidden = false; if (d.lat != null) map.setView([d.lat, d.lng], 17); $("map").scrollIntoView({ behavior: "smooth", block: "center" }); };
-  $("fstars").onclick = e => { const b = e.target.closest("button"); if (!b) return; d.rating = +b.dataset.n; [...$("fstars").children].forEach((x, i) => x.classList.toggle("on", i < d.rating)); };
-  $("fphotos").onchange = e => { S.files = [...e.target.files]; };
+  bindStars("fstars", () => d.rating, n => d.rating = n);
+  bindFile("fphotos", f => S.files = f);
   const lk = $("flink");
   const go = () => { const v = lk.value.trim(); if (v && v !== d.resolvedFor) resolveLink(v); };
   lk.addEventListener("paste", () => setTimeout(go, 0)); lk.addEventListener("change", go);
@@ -207,34 +235,42 @@ async function savePlace() {
 }
 
 // ---------- place detail ----------
-async function openPlace(id) {
+function openPlace(id) {
   const st = { reviews: null, rating: 0, files: [] };
-  const sheet = { kind: "place", id, rerender: () => render() }; S.sheet = sheet;
+  const sheet = { kind: "place", id, rerender: () => render() }; S.sheet = sheet; S.sel = id;
   const p0 = S.places.find(x => x.id === id); if (p0) map.setView([p0.lat, p0.lng], Math.max(map.getZoom(), 15));
+  renderList();
   function render() {
     if (S.sheet !== sheet) return;
     const p = S.places.find(x => x.id === id); if (!p) return closeSheet();
     const keep = $("rtext") ? $("rtext").value : "";
     const gm = p.gmaps_url && /^https:\/\//.test(p.gmaps_url) ? p.gmaps_url : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ", " + (p.address || "Zagreb"))}`;
     const mine = S.user && p.created_by === S.user.id;
-    showSheet(`<div class="sheethead"><div style="min-width:0"><h3>${esc(p.name)}</h3><p class="note">${esc([p.address, p.district].filter(Boolean).join(" · "))}</p></div><button class="x" id="sx" type="button" aria-label="Close">✕</button></div>
-    <div class="tags">${(p.categories || []).map(c => `<span class="tag" style="--c:${COLORS[c]}">${esc(catName(c))}</span>`).join("")}</div>
-    <a class="link" href="${esc(gm)}" target="_blank" rel="noopener">↗ ${esc(t("gmaps"))}</a>
-    <h4 class="sec">${esc(t("reviews"))}${p.reviewCount ? ` · <span class="note">${esc(t("reviewsN")(p.reviewCount))}</span>` : ""}</h4>
-    <div id="rlist">${st.reviews == null ? `<p class="note">${esc(t("loading"))}</p>` : st.reviews.length ? st.reviews.map(r => `<div class="review"><div class="note">${r.rating ? `<span style="color:var(--star)">${"★".repeat(r.rating)}</span> · ` : ""}${esc(r.author_name || t("someone"))} · ${new Date(r.created_at).toLocaleDateString(lang === "hr" ? "hr-HR" : "en-GB")}</div>${r.body ? `<div>${esc(r.body)}</div>` : ""}${(r.photos || []).length ? `<div class="photos">${r.photos.map(ph => `<a href="${esc(photoUrl(ph))}" target="_blank" rel="noopener"><img src="${esc(photoUrl(ph))}" alt="" loading="lazy"></a>`).join("")}</div>` : ""}${S.user && r.created_by === S.user.id ? `<button class="btn ghost small" data-del="${r.id}" type="button" style="align-self:flex-start">${esc(t("del"))}</button>` : ""}</div>`).join("") : `<p class="note">${esc(t("noReviews"))}</p>`}</div>
-    ${S.user ? `<div class="review" style="gap:10px"><h4 class="sec">${esc(t("writeReview"))}</h4>${starsHtml("rstars", st.rating)}
-      <textarea id="rtext" maxlength="1000" placeholder="${esc(t("reviewText"))}"></textarea>
-      <label class="f" style="font-weight:400">${esc(t("addPhoto"))} — <span class="note">${esc(t("photoTip"))}</span><input id="rphotos" type="file" accept="image/*" multiple></label>
-      <p class="err" id="rerr" role="alert"></p><div class="row"><button class="btn" id="rpost" type="button">${esc(t("post"))}</button></div></div>`
-      : `<p class="note">${esc(t("loginToPost"))}</p>`}
-    ${mine ? `<div class="row" id="delrow"><button class="btn ghost small" id="delplace" type="button">${esc(t("delPlace"))}</button></div>` : ""}`);
+    const rev = st.reviews == null ? `<p class="note">${esc(t("loading"))}</p>` : st.reviews.length ? st.reviews.map(r => `<div class="review">
+        <div class="who">${r.rating ? `<span class="rst">${Array.from({ length: r.rating }, () => `<span>${IC.star}</span>`).join("")}</span>` : ""}<span>${esc(r.author_name || t("someone"))} · ${new Date(r.created_at).toLocaleDateString(lang === "hr" ? "hr-HR" : "en-GB")}</span></div>
+        ${r.body ? `<div>${esc(r.body)}</div>` : ""}
+        ${(r.photos || []).length ? `<div class="photos">${r.photos.map(ph => `<a href="${esc(photoUrl(ph))}" target="_blank" rel="noopener"><img src="${esc(photoUrl(ph))}" alt="" loading="lazy"></a>`).join("")}</div>` : ""}
+        ${S.user && r.created_by === S.user.id ? `<button class="btn ghost small" data-del="${r.id}" type="button" style="align-self:flex-start">${esc(t("del"))}</button>` : ""}</div>`).join("") : `<p class="note">${esc(t("noReviews"))}</p>`;
+    showSheet(`${band(p.name, [p.district, p.address].filter(Boolean).join(" · "), mainCat(p))}
+    <div class="body">
+      <div class="tags">${(p.categories || []).map(c => `<span class="tag" style="--c:${COLORS[c]}">${ic(c)}${esc(catName(c))}</span>`).join("")}</div>
+      <a class="link" href="${esc(gm)}" target="_blank" rel="noopener">${esc(t("gmaps"))} ${ic("external")}</a>
+      <h4 class="sec">${esc(t("reviews"))}${p.avg ? `<span class="note">★ ${p.avg.toFixed(1)} · ${esc(t("reviewsN")(p.reviewCount))}</span>` : ""}</h4>
+      <div id="rlist" style="display:flex;flex-direction:column;gap:14px">${rev}</div>
+      ${S.user ? `<div class="review" style="gap:12px"><span class="step"><b>+</b>${esc(t("writeReview"))}</span>${starsHtml("rstars", st.rating)}
+        <textarea id="rtext" maxlength="1000" placeholder="${esc(t("reviewText"))}" style="font:400 .95rem var(--body);border:0;border-bottom:1.5px solid var(--line);padding:9px 2px;outline:none"></textarea>
+        ${fileHtml("rphotos")}
+        <p class="err" id="rerr" role="alert"></p><div class="row"><button class="btn" id="rpost" type="button">${esc(t("post"))}</button></div></div>`
+        : `<p class="note">${esc(t("loginToPost"))}</p>`}
+      ${mine ? `<div class="row" id="delrow"><button class="btn ghost small" id="delplace" type="button">${esc(t("delPlace"))}</button></div>` : ""}
+    </div>`, colorOf(p));
     if ($("rtext")) $("rtext").value = keep;
     $("sx").onclick = closeSheet;
-    if ($("rstars")) $("rstars").onclick = e => { const b = e.target.closest("button"); if (!b) return; st.rating = +b.dataset.n; [...$("rstars").children].forEach((x, i) => x.classList.toggle("on", i < st.rating)); };
-    if ($("rphotos")) $("rphotos").onchange = e => { st.files = [...e.target.files]; };
+    bindStars("rstars", () => st.rating, n => st.rating = n);
+    bindFile("rphotos", f => st.files = f);
     if ($("rpost")) $("rpost").onclick = post;
-    $("rlist").onclick = async e => { const b = e.target.closest("[data-del]"); if (!b) return; b.disabled = true; await sb.from("reviews").delete().eq("id", b.dataset.del); await loadReviews(); await loadPlaces(); };
-    if ($("delplace")) $("delplace").onclick = () => { $("delrow").innerHTML = `<span class="note">${esc(t("confirmDel"))}</span><button class="btn small" id="delyes" type="button" style="background:var(--danger)">${esc(t("yes"))}</button>`; $("delyes").onclick = async () => { await sb.from("places").delete().eq("id", id); closeSheet(); loadPlaces(); }; };
+    $("rlist").onclick = async e => { const b = e.target.closest("[data-del]"); if (!b) return; b.disabled = true; await sb.from("reviews").delete().eq("id", b.dataset.del); await loadReviews(); loadPlaces(); };
+    if ($("delplace")) $("delplace").onclick = () => { $("delrow").innerHTML = `<span class="note">${esc(t("confirmDel"))}</span><button class="btn small warn" id="delyes" type="button">${esc(t("yes"))}</button>`; $("delyes").onclick = async () => { await sb.from("places").delete().eq("id", id); closeSheet(); loadPlaces(); }; };
   }
   async function loadReviews() {
     const { data } = await sb.from("reviews").select("*").eq("place_id", id).order("created_at", { ascending: false });
@@ -257,4 +293,5 @@ async function openPlace(id) {
 renderAll();
 sb.auth.getSession().then(({ data }) => { S.user = data.session ? data.session.user : null; renderChrome(); });
 loadPlaces();
+window.__mamapa = { S, renderAll, openPlace };
 })();

@@ -2,7 +2,7 @@ window.BEBI_I18N = {
   hr: {
     sub: "Mjesta za roditelje s djecom 0–3 god.",
     search: "Traži mjesto ili adresu…", all: "Sve", allDistricts: "Svi kvartovi", places: "Mjesta",
-    add: "+ Dodaj mjesto", login: "Prijava s Googleom", logout: "Odjava",
+    add: "+ Dodaj mjesto", login: "Prijava s Googleom", loginShort: "Prijava", logout: "Odjava",
     loginToPost: "Za dodavanje mjesta i recenzija prijavi se Google računom.",
     emptyT: "Još nema mjesta", emptyD: "Dodaj prvo mjesto koje poznaješ — stol za previjanje, igraonicu ili kafić bez dima.",
     noMatch: "Nema mjesta za ovaj filter.", loading: "Učitavanje…", offline: "Podaci trenutno nisu dostupni. Pokušaj ponovno kasnije.",
@@ -20,13 +20,13 @@ window.BEBI_I18N = {
     dupe: "Ovo mjesto već postoji. Otvori ga i dodaj recenziju.", openIt: "Otvori",
     gmaps: "Otvori u Google kartama", reviews: "Recenzije", noReviews: "Još nema recenzija.",
     post: "Objavi", del: "Obriši", delPlace: "Obriši mjesto", confirmDel: "Sigurno obrisati?", yes: "Da, obriši",
-    someone: "Roditelj", foot: "Karta © OpenStreetMap suradnici. Podatke dodaju roditelji iz Zagreba.",
+    someone: "Roditelj", foot: "Karta © OpenStreetMap suradnici, CARTO. Podatke dodaju roditelji iz Zagreba.",
     reviewsN: n => n === 1 ? "1 recenzija" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? n + " recenzije" : n + " recenzija"
   },
   en: {
     sub: "Places for parents with kids aged 0–3",
     search: "Search places or addresses…", all: "All", allDistricts: "All districts", places: "Places",
-    add: "+ Add place", login: "Sign in with Google", logout: "Sign out",
+    add: "+ Add place", login: "Sign in with Google", loginShort: "Sign in", logout: "Sign out",
     loginToPost: "Sign in with your Google account to add places and reviews.",
     emptyT: "No places yet", emptyD: "Add the first spot you know — a changing table, a play area or a smoke-free café.",
     noMatch: "No places match this filter.", loading: "Loading…", offline: "Data isn't available right now. Try again later.",
@@ -44,7 +44,7 @@ window.BEBI_I18N = {
     dupe: "This place is already listed. Open it and add your review.", openIt: "Open",
     gmaps: "Open in Google Maps", reviews: "Reviews", noReviews: "No reviews yet.",
     post: "Post", del: "Delete", delPlace: "Delete place", confirmDel: "Delete for sure?", yes: "Yes, delete",
-    someone: "Parent", foot: "Map © OpenStreetMap contributors. Places added by parents in Zagreb.",
+    someone: "Parent", foot: "Map © OpenStreetMap contributors, CARTO. Places added by parents in Zagreb.",
     reviewsN: n => n === 1 ? "1 review" : n + " reviews"
   }
 };
@@ -56,4 +56,4 @@ window.BEBI_CATS = [
   { id: "nursing",    hr: "Kutak za dojenje",   en: "Nursing room" },
   { id: "stroller",   hr: "Pristup s kolicima", en: "Stroller-friendly" }
 ];
-window.BEBI_COLORS = { changing:"#2E7FC4", playarea:"#E07A2E", playground:"#3E9B4F", nosmoke:"#8A5A9E", nursing:"#D45886", stroller:"#4E7F87" };
+window.BEBI_COLORS = { changing:"#17A99B", playarea:"#F15A2B", playground:"#F5B21B", nosmoke:"#1F6DB3", nursing:"#E9677A", stroller:"#5E6F7E" };
