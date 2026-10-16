@@ -20,7 +20,7 @@ window.BEBI_I18N = {
     dupe: "Ovo mjesto već postoji. Otvori ga i dodaj recenziju.", openIt: "Otvori",
     gmaps: "Otvori u Google kartama", reviews: "Recenzije", noReviews: "Još nema recenzija.",
     post: "Objavi", del: "Obriši", delPlace: "Obriši mjesto", confirmDel: "Sigurno obrisati?", yes: "Da, obriši",
-    someone: "Roditelj", foot: "Karta © OpenStreetMap suradnici, CARTO. Podatke dodaju roditelji iz Zagreba.",
+    someone: "Roditelj", foot: "Karta © OpenStreetMap suradnici, OpenFreeMap. Podatke dodaju roditelji iz Zagreba.",
     reviewsN: n => n === 1 ? "1 recenzija" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? n + " recenzije" : n + " recenzija"
   },
   en: {
@@ -44,7 +44,7 @@ window.BEBI_I18N = {
     dupe: "This place is already listed. Open it and add your review.", openIt: "Open",
     gmaps: "Open in Google Maps", reviews: "Reviews", noReviews: "No reviews yet.",
     post: "Post", del: "Delete", delPlace: "Delete place", confirmDel: "Delete for sure?", yes: "Yes, delete",
-    someone: "Parent", foot: "Map © OpenStreetMap contributors, CARTO. Places added by parents in Zagreb.",
+    someone: "Parent", foot: "Map © OpenStreetMap contributors, OpenFreeMap. Places added by parents in Zagreb.",
     reviewsN: n => n === 1 ? "1 review" : n + " reviews"
   }
 };
