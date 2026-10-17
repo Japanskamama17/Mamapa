@@ -12,7 +12,7 @@ const mainCat = p => (p.categories || [])[0] || "changing";
 const colorOf = p => COLORS[mainCat(p)] || "#17A99B";
 
 const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-const S = { places: [], loaded: false, failed: false, cat: null, district: "", q: "", user: null, sheet: null, pick: null, sel: null };
+const S = { places: [], loaded: false, failed: false, cats: new Set(), district: "", q: "", user: null, sheet: null, pick: null, sel: null };
 
 $("brandmark").innerHTML = IC.pin; $("searchico").innerHTML = IC.search; $("fabico").innerHTML = IC.plus;
 
@@ -102,7 +102,7 @@ function displayName() {
 // ---------- chrome & list ----------
 function filtered() {
   const q = S.q.trim().toLowerCase();
-  return S.places.filter(p => (!S.cat || (p.categories || []).includes(S.cat)) && (!S.district || p.district === S.district) &&
+  return S.places.filter(p => [...S.cats].every(c => (p.categories || []).includes(c)) && (!S.district || p.district === S.district) &&
     (!q || (p.name + " " + p.address + " " + p.district).toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name, "hr"));
 }
 function renderChrome() {
@@ -111,8 +111,8 @@ function renderChrome() {
   $("t-pick").textContent = t("pick"); $("pickcancel").textContent = t("cancel"); $("t-foot").textContent = t("foot");
   $("fabtxt").textContent = t("add").replace("+ ", ""); $("auth").textContent = S.user ? t("logout") : t("loginShort");
   $("lang-hr").setAttribute("aria-pressed", lang === "hr"); $("lang-en").setAttribute("aria-pressed", lang === "en");
-  $("cats").innerHTML = `<button class="tile all" type="button" data-c="" aria-pressed="${!S.cat}"><span class="blk">${esc(t("all").toUpperCase())}</span><span class="lbl">${esc(t("all"))}</span></button>` +
-    CATS.map(c => `<button class="tile" type="button" data-c="${c.id}" style="--c:${COLORS[c.id]}" aria-pressed="${S.cat === c.id}"><span class="blk">${ic(c.id)}</span><span class="lbl">${esc(c[lang])}</span></button>`).join("");
+  $("cats").innerHTML = `<button class="tile all" type="button" data-c="" aria-pressed="${!S.cats.size}"><span class="blk">${esc(t("all").toUpperCase())}</span><span class="lbl">${esc(t("all"))}</span></button>` +
+    CATS.map(c => `<button class="tile" type="button" data-c="${c.id}" style="--c:${COLORS[c.id]}" aria-pressed="${S.cats.has(c.id)}"><span class="blk">${ic(c.id)}</span><span class="lbl">${esc(c[lang])}</span></button>`).join("");
   const ds = [...new Set(S.places.map(p => p.district).filter(Boolean))].sort((a, b) => a.localeCompare(b, "hr"));
   $("district").innerHTML = `<option value="">${esc(t("allDistricts"))}</option>` + ds.map(d => `<option ${d === S.district ? "selected" : ""}>${esc(d)}</option>`).join("");
 }
@@ -129,7 +129,7 @@ function renderList() {
     <span class="end">${p.avg ? `${ic("star", "st")}${p.avg.toFixed(1)}` : ""}${ic("chevron", "chev")}</span></button>`).join("");
 }
 function renderAll() { renderChrome(); renderList(); }
-$("cats").onclick = e => { const b = e.target.closest(".tile"); if (!b) return; S.cat = b.dataset.c || null; renderAll(); };
+$("cats").onclick = e => { const b = e.target.closest(".tile"); if (!b) return; const c = b.dataset.c; if (!c) S.cats.clear(); else if (S.cats.has(c)) S.cats.delete(c); else S.cats.add(c); renderAll(); };
 $("district").onchange = e => { S.district = e.target.value; renderList(); };
 $("q").oninput = e => { S.q = e.target.value; renderList(); };
 $("list").onclick = e => { const b = e.target.closest(".item"); if (b) openPlace(b.dataset.id); };
