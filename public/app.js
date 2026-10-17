@@ -132,18 +132,19 @@ function bindStars(id, get, set) { const el = $(id); if (!el) return; el.onclick
 
 // ---------- photos ----------
 async function compress(file) {
-  const img = await createImageBitmap(file).catch(() => null);
-  if (!img) return file;
+  const img = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
+  if (!img) return null; // never upload the original: it may carry GPS location
   const max = 1600, k = Math.min(1, max / Math.max(img.width, img.height));
   const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-  return await new Promise(r => c.toBlob(b => r(b || file), "image/jpeg", 0.82));
+  return await new Promise(r => c.toBlob(b => r(b || null), "image/jpeg", 0.82));
 }
 async function uploadPhotos(files) {
   const paths = []; let failed = false;
   for (const f of files.slice(0, 6)) {
     try {
       const blob = await compress(f);
+      if (!blob) throw new Error("unreadable image");
       const path = `${S.user.id}/${crypto.randomUUID()}.jpg`;
       const { error } = await sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg" });
       if (error) throw error; paths.push(path);
