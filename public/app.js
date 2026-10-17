@@ -23,8 +23,13 @@ const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenS
 function rasterFallback() { L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: OSM_ATTR }).addTo(map); }
 try {
   if (!L.maplibreGL || !window.maplibregl || (maplibregl.supported && !maplibregl.supported())) throw new Error("no webgl");
-  L.maplibreGL({ style: "https://tiles.openfreemap.org/styles/liberty",
+  const gl = L.maplibreGL({ style: "https://tiles.openfreemap.org/styles/bright",
     attribution: '<a href="https://openfreemap.org">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> ' + OSM_ATTR }).addTo(map);
+  // keep the map flat: hide any 3D building layers
+  const mm = gl.getMaplibreMap && gl.getMaplibreMap();
+  if (mm) mm.on("styledata", () => {
+    (mm.getStyle().layers || []).forEach(l => { if (l.type === "fill-extrusion" && mm.getLayoutProperty(l.id, "visibility") !== "none") mm.setLayoutProperty(l.id, "visibility", "none"); });
+  });
 } catch (e) { rasterFallback(); }
 const pinLayer = L.layerGroup().addTo(map);
 const DROP = c => `<svg class="drop" viewBox="0 0 34 44"><path d="M17 43C17 43 2 27.5 2 16.5a15 15 0 0 1 30 0C32 27.5 17 43 17 43z" fill="${c}" stroke="#fff" stroke-width="2"/></svg>`;
