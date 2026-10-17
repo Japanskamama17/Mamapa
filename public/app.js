@@ -25,11 +25,28 @@ try {
   if (!L.maplibreGL || !window.maplibregl || (maplibregl.supported && !maplibregl.supported())) throw new Error("no webgl");
   const gl = L.maplibreGL({ style: "https://tiles.openfreemap.org/styles/bright",
     attribution: '<a href="https://openfreemap.org">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> ' + OSM_ATTR }).addTo(map);
-  // keep the map flat: hide any 3D building layers
+  // Google-Maps-like colours on top of the free style, and keep it flat (no 3D buildings)
   const mm = gl.getMaplibreMap && gl.getMaplibreMap();
-  if (mm) mm.on("styledata", () => {
-    (mm.getStyle().layers || []).forEach(l => { if (l.type === "fill-extrusion" && mm.getLayoutProperty(l.id, "visibility") !== "none") mm.setLayoutProperty(l.id, "visibility", "none"); });
-  });
+  const G = { land:"#F5F5F3", water:"#AADAFF", park:"#CDEBC5", landuse:"#EEEEEB", building:"#E6E4E0", buildingLine:"#DAD7D2",
+              road:"#FFFFFF", casing:"#DADCE0", major:"#FDE293", majorCasing:"#F1C04A" };
+  const paint = (id, prop, val) => { try { mm.setPaintProperty(id, prop, val); } catch (e) {} };
+  function googleish() {
+    (mm.getStyle().layers || []).forEach(l => {
+      const id = l.id.toLowerCase(), src = (l["source-layer"] || "").toLowerCase();
+      if (l.type === "fill-extrusion") { try { mm.setLayoutProperty(l.id, "visibility", "none"); } catch (e) {} return; }
+      if (l.type === "background") return paint(l.id, "background-color", G.land);
+      if (src === "water" && l.type === "fill") return paint(l.id, "fill-color", G.water);
+      if (src === "waterway" && l.type === "line") return paint(l.id, "line-color", G.water);
+      if (l.type === "fill" && (src === "park" || /park|grass|wood|forest|meadow|garden|cemetery|pitch|playground/.test(id))) return paint(l.id, "fill-color", G.park);
+      if (l.type === "fill" && src === "building") { paint(l.id, "fill-color", G.building); return paint(l.id, "fill-outline-color", G.buildingLine); }
+      if (l.type === "fill" && (src === "landuse" || src === "landcover")) return paint(l.id, "fill-color", G.landuse);
+      if (l.type === "line" && src === "transportation" && !/rail|transit|ferry|aeroway|path|track/.test(id)) {
+        const major = /motorway|trunk/.test(id), casing = /casing|outline/.test(id);
+        return paint(l.id, "line-color", major ? (casing ? G.majorCasing : G.major) : (casing ? G.casing : G.road));
+      }
+    });
+  }
+  if (mm) mm.on("load", googleish);
 } catch (e) { rasterFallback(); }
 const pinLayer = L.layerGroup().addTo(map);
 const DROP = c => `<svg class="drop" viewBox="0 0 34 44"><path d="M17 43C17 43 2 27.5 2 16.5a15 15 0 0 1 30 0C32 27.5 17 43 17 43z" fill="${c}" stroke="#fff" stroke-width="2"/></svg>`;
